@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'register_page.dart';
+import 'products_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -51,8 +52,10 @@ class _LoginPageState extends State<LoginPage> {
               height: 48,
               child: ElevatedButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Logowanie - do implementacji')),
+                  // Symulacja logowania - przejdź do produktów
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProductsPage()),
                   );
                 },
                 style: ElevatedButton.styleFrom(
