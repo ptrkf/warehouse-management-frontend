@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'add_product_page.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -28,15 +29,17 @@ class _ProductsPageState extends State<ProductsPage> {
   void _loadMockData() {
     // Mockowe dane produktów dla systemu magazynowego
     _allProducts = [
-      Product(
-        id: '1',
-        name: 'Laptop Dell XPS 13',
-        category: 'Elektronika',
-        quantity: 15,
-        location: 'A-1-3',
-        minStock: 5,
-        description: 'Laptop biznesowy 13 cali',
-      ),
+    Product(
+  id: '1',
+  name: 'Laptop Dell XPS 13',
+  category: 'Elektronika',
+  quantity: 15,
+  location: 'A-1-3',
+  minStock: 5,
+  description: 'Laptop biznesowy 13 cali',
+  code: 'DELL-XPS13-001',
+  dimensions: '30.2x20.1x1.4 cm',
+),
       Product(
         id: '2',
         name: 'Krzesło biurowe Ergonomic',
@@ -439,25 +442,107 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   void _showAddProductDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+  // Tymczasowa implementacja - prosty dialog z podstawowymi polami
+  final nameController = TextEditingController();
+  final quantityController = TextEditingController();
+  final locationController = TextEditingController();
+  String selectedCategory = 'Elektronika';
+  
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
         title: const Text('Dodaj nowy produkt'),
-        content: const Text(
-          'Funkcja dodawania nowych produktów będzie dostępna w następnej wersji.\n\n'
-          'Obecnie możesz zarządzać istniejącymi produktami poprzez dodawanie/odejmowanie stanów.',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nazwa produktu',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: 'Kategoria',
+                  border: OutlineInputBorder(),
+                ),
+                items: ['Elektronika', 'Meble', 'Akcesoria', 'Biuro', 'Inne']
+                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                    .toList(),
+                onChanged: (value) => setState(() => selectedCategory = value!),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: quantityController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Ilość początkowa',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: locationController,
+                decoration: const InputDecoration(
+                  labelText: 'Lokalizacja (np. A-1-3)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const Text('ANULUJ'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty && 
+                  quantityController.text.isNotEmpty &&
+                  locationController.text.isNotEmpty) {
+                
+                final newProduct = Product(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: nameController.text,
+                  category: selectedCategory,
+                  quantity: int.tryParse(quantityController.text) ?? 0,
+                  location: locationController.text.toUpperCase(),
+                  minStock: 5,
+                  description: 'Produkt dodany przez użytkownika',
+                );
+                
+                Navigator.of(context).pop();
+                
+                this.setState(() {
+                  _allProducts.add(newProduct);
+                  _onSearchChanged();
+                });
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Produkt "${newProduct.name}" został dodany!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text('DODAJ', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
+// Model produktu
 // Model produktu
 class Product {
   final String id;
@@ -467,6 +552,8 @@ class Product {
   final String location;
   final int minStock;
   final String description;
+  final String? code;        // Nowe pole
+  final String? dimensions;  // Nowe pole
 
   Product({
     required this.id,
@@ -476,5 +563,7 @@ class Product {
     required this.location,
     required this.minStock,
     required this.description,
+    this.code,        // Opcjonalne
+    this.dimensions,  // Opcjonalne
   });
 }
