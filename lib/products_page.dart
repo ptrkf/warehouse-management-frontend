@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'add_product_page.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -29,17 +28,17 @@ class _ProductsPageState extends State<ProductsPage> {
   void _loadMockData() {
     // Mockowe dane produktów dla systemu magazynowego
     _allProducts = [
-    Product(
-  id: '1',
-  name: 'Laptop Dell XPS 13',
-  category: 'Elektronika',
-  quantity: 15,
-  location: 'A-1-3',
-  minStock: 5,
-  description: 'Laptop biznesowy 13 cali',
-  code: 'DELL-XPS13-001',
-  dimensions: '30.2x20.1x1.4 cm',
-),
+      Product(
+        id: '1',
+        name: 'Laptop Dell XPS 13',
+        category: 'Elektronika',
+        quantity: 15,
+        location: 'A-1-3',
+        minStock: 5,
+        description: 'Laptop biznesowy 13 cali',
+        code: 'DELL-XPS13-001',
+        dimensions: '30.2x20.1x1.4 cm',
+      ),
       Product(
         id: '2',
         name: 'Krzesło biurowe Ergonomic',
@@ -169,7 +168,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 ? _buildEmptyState()
                 : ListView.builder(
                     itemCount: _filteredProducts.length,
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80),
                     itemBuilder: (context, index) {
                       final product = _filteredProducts[index];
                       return _buildProductCard(product);
@@ -269,6 +268,12 @@ class _ProductsPageState extends State<ProductsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => _editProduct(product),
+              color: Colors.blue,
+              tooltip: 'Edytuj produkt',
+            ),
+            IconButton(
               icon: const Icon(Icons.remove_circle_outline),
               onPressed: () => _updateQuantity(product, -1),
               color: Colors.red,
@@ -364,6 +369,255 @@ class _ProductsPageState extends State<ProductsPage> {
     );
   }
 
+  void _editProduct(Product product) {
+    final nameController = TextEditingController(text: product.name);
+    final descriptionController = TextEditingController(text: product.description);
+    final quantityController = TextEditingController(text: product.quantity.toString());
+    final minStockController = TextEditingController(text: product.minStock.toString());
+    final locationController = TextEditingController(text: product.location);
+    String selectedCategory = product.category;
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.edit, color: Colors.blue),
+              SizedBox(width: 8),
+              Text('Edytuj produkt'),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nazwa produktu',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.inventory_2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: 'Kategoria',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.category),
+                    ),
+                    items: ['Elektronika', 'Meble', 'Akcesoria', 'Biuro', 'Odzież', 'Narzędzia', 'Inne']
+                        .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                        .toList(),
+                    onChanged: (value) => setState(() => selectedCategory = value!),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Opis',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.description),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: quantityController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Stan aktualny',
+                            border: OutlineInputBorder(),
+                            suffixText: 'szt.',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: minStockController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Min. stan',
+                            border: OutlineInputBorder(),
+                            suffixText: 'szt.',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: locationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Lokalizacja',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.location_on),
+                      hintText: 'np. A-1-3',
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ANULUJ'),
+            ),
+            FilledButton.icon(
+              onPressed: () => _confirmDeleteProduct(product),
+              icon: const Icon(Icons.delete),
+              label: const Text('USUŃ'),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (nameController.text.isNotEmpty && 
+                    locationController.text.isNotEmpty) {
+                  
+                  Navigator.of(context).pop();
+                  
+                  this.setState(() {
+                    // Aktualizuj pola produktu
+                    final index = _allProducts.indexWhere((p) => p.id == product.id);
+                    if (index != -1) {
+                      _allProducts[index] = Product(
+                        id: product.id,
+                        name: nameController.text,
+                        category: selectedCategory,
+                        quantity: int.tryParse(quantityController.text) ?? product.quantity,
+                        location: locationController.text.toUpperCase(),
+                        minStock: int.tryParse(minStockController.text) ?? product.minStock,
+                        description: descriptionController.text.isEmpty 
+                            ? 'Brak opisu' 
+                            : descriptionController.text,
+                        code: product.code,
+                        dimensions: product.dimensions,
+                      );
+                    }
+                    _onSearchChanged(); // Odśwież listę
+                  });
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Produkt "${nameController.text}" został zaktualizowany!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              style: FilledButton.styleFrom(backgroundColor: Colors.blue),
+              child: const Text('ZAPISZ ZMIANY'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteProduct(Product product) {
+    Navigator.of(context).pop(); // Zamknij dialog edycji
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Usuń produkt'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Czy na pewno chcesz usunąć produkt?'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(_getCategoryIcon(product.category), color: Colors.grey[600]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text('${product.category} • ${product.location}'),
+                        Text('Stan: ${product.quantity} szt.'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Ta akcja jest nieodwracalna!',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('ANULUJ'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              
+              setState(() {
+                _allProducts.remove(product);
+                _onSearchChanged();
+              });
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Produkt "${product.name}" został usunięty'),
+                  backgroundColor: Colors.red,
+                  action: SnackBarAction(
+                    label: 'COFNIJ',
+                    onPressed: () {
+                      setState(() {
+                        _allProducts.add(product);
+                        _onSearchChanged();
+                      });
+                    },
+                  ),
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('USUŃ PRODUKT'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showProductDetails(Product product) {
     final isLowStock = product.quantity <= product.minStock;
     
@@ -386,6 +640,8 @@ class _ProductsPageState extends State<ProductsPage> {
             _buildDetailRow('Aktualny stan', '${product.quantity} szt.'),
             _buildDetailRow('Minimalny stan', '${product.minStock} szt.'),
             _buildDetailRow('Lokalizacja', product.location),
+            if (product.code != null) _buildDetailRow('Kod', product.code!),
+            if (product.dimensions != null) _buildDetailRow('Wymiary', product.dimensions!),
             if (isLowStock) ...[
               const SizedBox(height: 8),
               Container(
@@ -442,118 +698,117 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   void _showAddProductDialog() {
-  // Tymczasowa implementacja - prosty dialog z podstawowymi polami
-  final nameController = TextEditingController();
-  final quantityController = TextEditingController();
-  final locationController = TextEditingController();
-  String selectedCategory = 'Elektronika';
-  
-  showDialog(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        title: const Text('Dodaj nowy produkt'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nazwa produktu',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                decoration: const InputDecoration(
-                  labelText: 'Kategoria',
-                  border: OutlineInputBorder(),
-                ),
-                items: ['Elektronika', 'Meble', 'Akcesoria', 'Biuro', 'Inne']
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                    .toList(),
-                onChanged: (value) => setState(() => selectedCategory = value!),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: quantityController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Ilość początkowa',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: locationController,
-                decoration: const InputDecoration(
-                  labelText: 'Lokalizacja (np. A-1-3)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ANULUJ'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty && 
-                  quantityController.text.isNotEmpty &&
-                  locationController.text.isNotEmpty) {
-                
-                final newProduct = Product(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  name: nameController.text,
-                  category: selectedCategory,
-                  quantity: int.tryParse(quantityController.text) ?? 0,
-                  location: locationController.text.toUpperCase(),
-                  minStock: 5,
-                  description: 'Produkt dodany przez użytkownika',
-                );
-                
-                Navigator.of(context).pop();
-                
-                this.setState(() {
-                  _allProducts.add(newProduct);
-                  _onSearchChanged();
-                });
-                
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Produkt "${newProduct.name}" został dodany!'),
-                    backgroundColor: Colors.green,
+    // Tymczasowa implementacja - prosty dialog z podstawowymi polami
+    final nameController = TextEditingController();
+    final quantityController = TextEditingController();
+    final locationController = TextEditingController();
+    String selectedCategory = 'Elektronika';
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Dodaj nowy produkt'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nazwa produktu',
+                    border: OutlineInputBorder(),
                   ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text('DODAJ', style: TextStyle(color: Colors.white)),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Kategoria',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: ['Elektronika', 'Meble', 'Akcesoria', 'Biuro', 'Inne']
+                      .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                      .toList(),
+                  onChanged: (value) => setState(() => selectedCategory = value!),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: quantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Ilość początkowa',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Lokalizacja (np. A-1-3)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ANULUJ'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameController.text.isNotEmpty && 
+                    quantityController.text.isNotEmpty &&
+                    locationController.text.isNotEmpty) {
+                  
+                  final newProduct = Product(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: nameController.text,
+                    category: selectedCategory,
+                    quantity: int.tryParse(quantityController.text) ?? 0,
+                    location: locationController.text.toUpperCase(),
+                    minStock: 5,
+                    description: 'Produkt dodany przez użytkownika',
+                  );
+                  
+                  Navigator.of(context).pop();
+                  
+                  this.setState(() {
+                    _allProducts.add(newProduct);
+                    _onSearchChanged();
+                  });
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Produkt "${newProduct.name}" został dodany!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+              child: const Text('DODAJ', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 // Model produktu
-// Model produktu
 class Product {
   final String id;
-  final String name;
-  final String category;
+  String name;
+  String category;
   int quantity;
-  final String location;
-  final int minStock;
-  final String description;
-  final String? code;        // Nowe pole
-  final String? dimensions;  // Nowe pole
+  String location;
+  int minStock;
+  String description;
+  final String? code;
+  final String? dimensions;
 
   Product({
     required this.id,
@@ -563,7 +818,7 @@ class Product {
     required this.location,
     required this.minStock,
     required this.description,
-    this.code,        // Opcjonalne
-    this.dimensions,  // Opcjonalne
+    this.code,
+    this.dimensions,
   });
 }
