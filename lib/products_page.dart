@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'add_product_page.dart';
+import 'add_category_page.dart';
+import 'add_location_page.dart';
+import 'add_operation_page.dart'; 
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -177,13 +182,74 @@ class _ProductsPageState extends State<ProductsPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddProductDialog,
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.add),
-        tooltip: 'Dodaj nowy produkt',
-      ),
+      // floatingActionButton: FloatingActionButton(
+      //   onPressed: _showAddProductDialog,
+      //   backgroundColor: Colors.blue,
+      //   foregroundColor: Colors.white,
+      //   child: const Icon(Icons.add),
+      //   tooltip: 'Dodaj nowy produkt',
+      // ),
+      floatingActionButton: SpeedDial(
+  icon: Icons.add,
+  activeIcon: Icons.close,
+  backgroundColor: Colors.blue,
+  foregroundColor: Colors.white,
+  overlayColor: Colors.black,
+  overlayOpacity: 0.5,
+  spacing: 10,
+  spaceBetweenChildren: 8,
+  
+  children: [
+    SpeedDialChild(
+      child: const Icon(Icons.inventory_2),
+      backgroundColor: Colors.blue,
+      foregroundColor: Colors.white,
+      label: 'Dodaj Produkt',
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddProductPage()),
+        );
+      },
+    ),
+    SpeedDialChild(
+      child: const Icon(Icons.swap_horiz),
+      backgroundColor: Colors.green,
+      foregroundColor: Colors.white,
+      label: 'Nowa Operacja',
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddStockMovementsPage()),
+        );
+      },
+    ),
+    SpeedDialChild(
+      child: const Icon(Icons.location_on),
+      backgroundColor: Colors.orange,
+      foregroundColor: Colors.white,
+      label: 'Dodaj Lokalizację',
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddLocationPage()),
+        );
+      },
+    ),
+    SpeedDialChild(
+      child: const Icon(Icons.category),
+      backgroundColor: Colors.purple,
+      foregroundColor: Colors.white,
+      label: 'Dodaj Kategorię',
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AddCategoryPage()),
+        );
+      },
+    ),
+  ],
+),
     );
   }
 
