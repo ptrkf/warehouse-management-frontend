@@ -2,19 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'services/token_service.dart'; 
 
-class TokenManager {
-  static const _storage = FlutterSecureStorage();
-  static const _tokenKey = 'auth_bearer_token';
-
-  static Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
-  }
-  // Dla celów testowych, jeśli potrzebujesz wstępnie zapisać token:
-  // static Future<void> saveToken(String token) async {
-  //   await _storage.write(key: _tokenKey, value: token);
-  // }
-}
 
 class AddCategoryPage extends StatefulWidget {
   const AddCategoryPage({super.key});
@@ -38,7 +27,7 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
         'name': _categoryName,
       };
 
-      final token = await TokenManager.getToken();
+      final token = await TokenService.getToken();
       if (token == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Błąd: Wymagane jest zalogowanie.')),
@@ -48,7 +37,7 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
 
       final headers = {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
+        'Authorization': 'Bearer ${token}',
       };
 
       try {
@@ -65,7 +54,7 @@ class _AddCategoryPageState extends State<AddCategoryPage> {
           Navigator.pop(context); 
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Błąd dodawania: ${response.statusCode} - ${response.body}')),
+            SnackBar(content: Text('Błąd dodawania: ${response.statusCode} - ${response.body} - ${token}')),
           );
         }
       } catch (e) {

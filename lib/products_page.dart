@@ -3,7 +3,84 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'add_product_page.dart';
 import 'add_category_page.dart';
 import 'add_location_page.dart';
-import 'add_operation_page.dart'; 
+import 'add_stock_movements_page.dart'; 
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'services/token_service.dart'; 
+
+class Product {
+  final int id;
+  String name;
+  String category;
+  int quantity;
+  String location; 
+  int minStock; 
+  String description; 
+  final Map<String, int>? dimensions;
+
+  Product({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.quantity,
+    required this.location,
+    required this.minStock,
+    required this.description,
+    this.dimensions,
+  });
+
+  factory Product.fromJson(Map<String, dynamic> json) {
+    // 1. Pobieramy zagnieżdżony obiekt 'product'
+    final productData = json['product'] as Map<String, dynamic>? ?? {};
+    
+    // 2. Pobieramy kategorie z wnętrza 'product'
+    final categoriesList = productData['categories'] as List? ?? [];
+    String categoryName = 'Nieokreślona';
+    if (categoriesList.isNotEmpty) {
+      // Zakładamy, że pierwszy element to mapa z polem 'name'
+      final firstCat = categoriesList.first;
+      if (firstCat is Map<String, dynamic>) {
+        categoryName = firstCat['name']?.toString() ?? 'Nieokreślona';
+      }
+    }
+    
+    // 3. Pobieramy ilość (quantity) z głównego poziomu DTO
+    final quantity = json['quantity'] as int? ?? 0;
+    
+    // 4. Pobieramy listę nazw lokalizacji z głównego poziomu DTO i łączymy w string
+    final locationNamesList = json['locationNames'] as List? ?? [];
+    final locationString = locationNamesList.isNotEmpty 
+        ? locationNamesList.join(', ') // Np. "A-1, B-2"
+        : 'Brak lokalizacji';
+
+    // 5. Pobieramy wymiary z wnętrza 'product'
+    Map<String, int>? dimensionsMap;
+    if (productData['dimensions'] != null && productData['dimensions'] is Map) {
+       final dims = productData['dimensions'];
+       dimensionsMap = {
+         'x': (dims['x'] as num?)?.toInt() ?? 0,
+         'y': (dims['y'] as num?)?.toInt() ?? 0,
+         'z': (dims['z'] as num?)?.toInt() ?? 0,
+       };
+    }
+
+    return Product(
+      // ID i Name bierzemy z obiektu 'product'
+      id: (productData['id'] as num?)?.toInt() ?? 0,
+      name: productData['name']?.toString() ?? 'Brak nazwy',
+      
+      category: categoryName,
+      quantity: quantity, 
+      location: locationString, 
+      
+      // Domyślne wartości dla pól, których nie ma w tym DTO
+      minStock: 5, 
+      description: 'Brak opisu', 
+      
+      dimensions: dimensionsMap,
+    );
+  }
+}
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key});
@@ -16,11 +93,15 @@ class _ProductsPageState extends State<ProductsPage> {
   final TextEditingController _searchController = TextEditingController();
   List<Product> _allProducts = [];
   List<Product> _filteredProducts = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  
+  final String _apiProductsUrl = 'http://ab-student-22052.uksouth.cloudapp.azure.com:8080/api/products/with-stock';
 
   @override
   void initState() {
     super.initState();
-    _loadMockData();
+    _fetchProducts();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -29,68 +110,66 @@ class _ProductsPageState extends State<ProductsPage> {
     _searchController.dispose();
     super.dispose();
   }
+  
+  Future<void> _fetchProducts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-  void _loadMockData() {
-    // Mockowe dane produktów dla systemu magazynowego
-    _allProducts = [
-      Product(
-        id: '1',
-        name: 'Laptop Dell XPS 13',
-        category: 'Elektronika',
-        quantity: 15,
-        location: 'A-1-3',
-        minStock: 5,
-        description: 'Laptop biznesowy 13 cali',
-        code: 'DELL-XPS13-001',
-        dimensions: '30.2x20.1x1.4 cm',
-      ),
-      Product(
-        id: '2',
-        name: 'Krzesło biurowe Ergonomic',
-        category: 'Meble',
-        quantity: 23,
-        location: 'B-2-1',
-        minStock: 10,
-        description: 'Krzesło z regulacją wysokości',
-      ),
-      Product(
-        id: '3',
-        name: 'Monitor Samsung 24"',
-        category: 'Elektronika',
-        quantity: 8,
-        location: 'A-1-5',
-        minStock: 12,
-        description: 'Monitor Full HD 1920x1080',
-      ),
-      Product(
-        id: '4',
-        name: 'Kabel HDMI 2m',
-        category: 'Akcesoria',
-        quantity: 45,
-        location: 'C-3-2',
-        minStock: 20,
-        description: 'Kabel HDMI wysokiej jakości',
-      ),
-      Product(
-        id: '5',
-        name: 'Długopis niebieski',
-        category: 'Biuro',
-        quantity: 2,
-        location: 'D-1-1',
-        minStock: 50,
-        description: 'Długopis żelowy 0.7mm',
-      ),
-      Product(
-        id: '6',
-        name: 'Papier A4 500 ark.',
-        category: 'Biuro',
-        quantity: 78,
-        location: 'D-1-3',
-        minStock: 30,
-        description: 'Papier biurowy 80g/m²',
-      ),
-    ];
-    _filteredProducts = List.from(_allProducts);
+    final token = await TokenService.getToken();
+    if (token == null) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Brak tokena autoryzacji. Zaloguj się ponownie.";
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    final headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+
+    try {
+      final response = await http.get(Uri.parse(_apiProductsUrl), headers: headers);
+
+      if (response.statusCode == 200) {
+        // Dekodujemy listę obiektów StockItemLocationDto
+        final List<dynamic> jsonList = json.decode(utf8.decode(response.bodyBytes));
+        
+        if (mounted) {
+          setState(() {
+            _allProducts = jsonList.map((item) => Product.fromJson(item)).toList();
+            _filteredProducts = List.from(_allProducts);
+            _isLoading = false;
+          });
+        }
+      } else if (response.statusCode == 401) {
+         if (mounted) {
+            setState(() {
+              _errorMessage = "Sesja wygasła lub brak autoryzacji. Kod: 401";
+              _isLoading = false;
+            });
+          }
+      } else {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Błąd serwera: ${response.statusCode}';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Błąd połączenia sieciowego: $e';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _onSearchChanged() {
@@ -114,14 +193,16 @@ class _ProductsPageState extends State<ProductsPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            onPressed: () {
+              TokenService.deleteToken(); 
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
             tooltip: 'Wyloguj',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Panel wyszukiwania i statystyk
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -130,7 +211,6 @@ class _ProductsPageState extends State<ProductsPage> {
             ),
             child: Column(
               children: [
-                // Pasek wyszukiwania
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
@@ -154,7 +234,6 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
                 const SizedBox(height: 12),
                 
-                // Statystyki
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -167,89 +246,87 @@ class _ProductsPageState extends State<ProductsPage> {
             ),
           ),
 
-          // Lista produktów
           Expanded(
-            child: _filteredProducts.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    itemCount: _filteredProducts.length,
-                    padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80),
-                    itemBuilder: (context, index) {
-                      final product = _filteredProducts[index];
-                      return _buildProductCard(product);
-                    },
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMessage != null
+                    ? Center(
+                        child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                      )
+                    : _filteredProducts.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            itemCount: _filteredProducts.length,
+                            padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 80),
+                            itemBuilder: (context, index) {
+                              final product = _filteredProducts[index];
+                              return _buildProductCard(product);
+                            },
+                          ),
           ),
         ],
       ),
-      // floatingActionButton: FloatingActionButton(
-      //   onPressed: _showAddProductDialog,
-      //   backgroundColor: Colors.blue,
-      //   foregroundColor: Colors.white,
-      //   child: const Icon(Icons.add),
-      //   tooltip: 'Dodaj nowy produkt',
-      // ),
       floatingActionButton: SpeedDial(
-  icon: Icons.add,
-  activeIcon: Icons.close,
-  backgroundColor: Colors.blue,
-  foregroundColor: Colors.white,
-  overlayColor: Colors.black,
-  overlayOpacity: 0.5,
-  spacing: 10,
-  spaceBetweenChildren: 8,
-  
-  children: [
-    SpeedDialChild(
-      child: const Icon(Icons.inventory_2),
-      backgroundColor: Colors.blue,
-      foregroundColor: Colors.white,
-      label: 'Dodaj Produkt',
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddProductPage()),
-        );
-      },
-    ),
-    SpeedDialChild(
-      child: const Icon(Icons.swap_horiz),
-      backgroundColor: Colors.green,
-      foregroundColor: Colors.white,
-      label: 'Nowa Operacja',
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddStockMovementsPage()),
-        );
-      },
-    ),
-    SpeedDialChild(
-      child: const Icon(Icons.location_on),
-      backgroundColor: Colors.orange,
-      foregroundColor: Colors.white,
-      label: 'Dodaj Lokalizację',
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddLocationPage()),
-        );
-      },
-    ),
-    SpeedDialChild(
-      child: const Icon(Icons.category),
-      backgroundColor: Colors.purple,
-      foregroundColor: Colors.white,
-      label: 'Dodaj Kategorię',
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const AddCategoryPage()),
-        );
-      },
-    ),
-  ],
-),
+        icon: Icons.add,
+        activeIcon: Icons.close,
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        overlayColor: Colors.black,
+        overlayOpacity: 0.5,
+        spacing: 10,
+        spaceBetweenChildren: 8,
+        
+        children: [
+          SpeedDialChild(
+            child: const Icon(Icons.inventory_2),
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            label: 'Dodaj Produkt',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddProductPage()),
+              );
+            },
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.swap_horiz),
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            label: 'Nowa Operacja',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddStockMovementsPage()),
+              );
+            },
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.location_on),
+            backgroundColor: Colors.orange,
+            foregroundColor: Colors.white,
+            label: 'Dodaj Lokalizację',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddLocationPage()),
+              );
+            },
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.category),
+            backgroundColor: Colors.purple,
+            foregroundColor: Colors.white,
+            label: 'Dodaj Kategorię',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddCategoryPage()),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -416,12 +493,7 @@ class _ProductsPageState extends State<ProductsPage> {
       final newQuantity = product.quantity + change;
       if (newQuantity >= 0) {
         product.quantity = newQuantity;
-        _filteredProducts = List.from(_allProducts.where((p) {
-          final query = _searchController.text.toLowerCase();
-          return p.name.toLowerCase().contains(query) ||
-                 p.category.toLowerCase().contains(query) ||
-                 p.location.toLowerCase().contains(query);
-        }));
+        _onSearchChanged(); 
       }
     });
     
@@ -553,7 +625,6 @@ class _ProductsPageState extends State<ProductsPage> {
                   Navigator.of(context).pop();
                   
                   this.setState(() {
-                    // Aktualizuj pola produktu
                     final index = _allProducts.indexWhere((p) => p.id == product.id);
                     if (index != -1) {
                       _allProducts[index] = Product(
@@ -566,11 +637,10 @@ class _ProductsPageState extends State<ProductsPage> {
                         description: descriptionController.text.isEmpty 
                             ? 'Brak opisu' 
                             : descriptionController.text,
-                        code: product.code,
                         dimensions: product.dimensions,
                       );
                     }
-                    _onSearchChanged(); // Odśwież listę
+                    _onSearchChanged(); 
                   });
                   
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -591,7 +661,7 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 
   void _confirmDeleteProduct(Product product) {
-    Navigator.of(context).pop(); // Zamknij dialog edycji
+    Navigator.of(context).pop(); 
     
     showDialog(
       context: context,
@@ -706,8 +776,9 @@ class _ProductsPageState extends State<ProductsPage> {
             _buildDetailRow('Aktualny stan', '${product.quantity} szt.'),
             _buildDetailRow('Minimalny stan', '${product.minStock} szt.'),
             _buildDetailRow('Lokalizacja', product.location),
-            if (product.code != null) _buildDetailRow('Kod', product.code!),
-            if (product.dimensions != null) _buildDetailRow('Wymiary', product.dimensions!),
+            if (product.dimensions != null) _buildDetailRow('Wymiary (X)', product.dimensions!['x'].toString()),
+            if (product.dimensions != null) _buildDetailRow('Wymiary (Y)', product.dimensions!['y'].toString()),
+            if (product.dimensions != null) _buildDetailRow('Wymiary (Z)', product.dimensions!['z'].toString()),
             if (isLowStock) ...[
               const SizedBox(height: 8),
               Container(
@@ -762,129 +833,4 @@ class _ProductsPageState extends State<ProductsPage> {
       ),
     );
   }
-
-  void _showAddProductDialog() {
-    // Tymczasowa implementacja - prosty dialog z podstawowymi polami
-    final nameController = TextEditingController();
-    final quantityController = TextEditingController();
-    final locationController = TextEditingController();
-    String selectedCategory = 'Elektronika';
-    
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Dodaj nowy produkt'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nazwa produktu',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Kategoria',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: ['Elektronika', 'Meble', 'Akcesoria', 'Biuro', 'Inne']
-                      .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                      .toList(),
-                  onChanged: (value) => setState(() => selectedCategory = value!),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: quantityController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Ilość początkowa',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: locationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Lokalizacja (np. A-1-3)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('ANULUJ'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.isNotEmpty && 
-                    quantityController.text.isNotEmpty &&
-                    locationController.text.isNotEmpty) {
-                  
-                  final newProduct = Product(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: nameController.text,
-                    category: selectedCategory,
-                    quantity: int.tryParse(quantityController.text) ?? 0,
-                    location: locationController.text.toUpperCase(),
-                    minStock: 5,
-                    description: 'Produkt dodany przez użytkownika',
-                  );
-                  
-                  Navigator.of(context).pop();
-                  
-                  this.setState(() {
-                    _allProducts.add(newProduct);
-                    _onSearchChanged();
-                  });
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Produkt "${newProduct.name}" został dodany!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-              child: const Text('DODAJ', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// Model produktu
-class Product {
-  final String id;
-  String name;
-  String category;
-  int quantity;
-  String location;
-  int minStock;
-  String description;
-  final String? code;
-  final String? dimensions;
-
-  Product({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.quantity,
-    required this.location,
-    required this.minStock,
-    required this.description,
-    this.code,
-    this.dimensions,
-  });
 }

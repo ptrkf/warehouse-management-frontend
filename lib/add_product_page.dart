@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'services/token_service.dart';
 
 class Category {
   final int id;
@@ -14,15 +15,6 @@ class Category {
       id: json['id'] as int,
       name: json['name'] as String,
     );
-  }
-}
-
-class TokenManager {
-  static const _storage = FlutterSecureStorage();
-  static const _tokenKey = 'auth_bearer_token';
-
-  static Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
   }
 }
 
@@ -56,7 +48,7 @@ class _AddProductPageState extends State<AddProductPage> {
   }
 
   Future<void> _fetchCategories() async {
-    final token = await TokenManager.getToken();
+    final token = await TokenService.getToken();
 
     if (token == null) {
       if (mounted) {
@@ -120,7 +112,7 @@ class _AddProductPageState extends State<AddProductPage> {
         'categoryIds': _selectedCategoryIds,
       };
 
-      final token = await TokenManager.getToken();
+      final token = await TokenService.getToken();
       if (token == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Błąd: Wymagane jest zalogowanie.')),

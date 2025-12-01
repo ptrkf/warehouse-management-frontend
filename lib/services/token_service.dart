@@ -35,4 +35,10 @@ class TokenService {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
+
+   static Future<void> deleteToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_userEmailKey);
+  }
 }
