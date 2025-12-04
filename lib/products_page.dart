@@ -276,17 +276,21 @@ class _ProductsPageState extends State<ProductsPage> {
         spacing: 10,
         spaceBetweenChildren: 8,
         
-        children: [
+         children: [
           SpeedDialChild(
             child: const Icon(Icons.inventory_2),
             backgroundColor: Colors.blue,
             foregroundColor: Colors.white,
             label: 'Dodaj Produkt',
-            onTap: () {
-              Navigator.push(
+            onTap: () async { // Zmieniamy na async i używamy await
+              final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddProductPage()),
               );
+              // Sprawdzamy, czy strona zwróciła 'true' (sygnał do odświeżenia)
+              if (shouldRefresh == true) {
+                _fetchProducts(); // Metoda odświeżająca dane
+              }
             },
           ),
           SpeedDialChild(
@@ -294,11 +298,15 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,
             label: 'Nowa Operacja',
-            onTap: () {
-              Navigator.push(
+            onTap: () async { // Zmieniamy na async i używamy await
+              final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddStockMovementsPage()),
               );
+              // Sprawdzamy, czy strona zwróciła 'true'
+              if (shouldRefresh == true) {
+                _fetchProducts(); 
+              }
             },
           ),
           SpeedDialChild(
@@ -306,11 +314,15 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.orange,
             foregroundColor: Colors.white,
             label: 'Dodaj Lokalizację',
-            onTap: () {
-              Navigator.push(
+            onTap: () async { // Zmieniamy na async i używamy await
+              final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddLocationPage()),
               );
+              // Sprawdzamy, czy strona zwróciła 'true'
+              if (shouldRefresh == true) {
+                _fetchProducts(); 
+              }
             },
           ),
           SpeedDialChild(
@@ -318,11 +330,14 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.purple,
             foregroundColor: Colors.white,
             label: 'Dodaj Kategorię',
-            onTap: () {
-              Navigator.push(
+            onTap: () async { // Dodajemy async/await, choć dodanie kategorii nie wpływa bezpośrednio na wyświetlanie produktów (chyba że dodaje nową, wcześniej niewidoczną)
+              final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddCategoryPage()),
               );
+              if (shouldRefresh == true) {
+                _fetchProducts(); 
+              }
             },
           ),
         ],
@@ -360,7 +375,7 @@ class _ProductsPageState extends State<ProductsPage> {
     );
   }
 
-  Widget _buildProductCard(Product product) {
+ Widget _buildProductCard(Product product) {
     final isLowStock = product.quantity <= product.minStock;
     
     return Card(
@@ -407,28 +422,12 @@ class _ProductsPageState extends State<ProductsPage> {
             ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => _editProduct(product),
-              color: Colors.blue,
-              tooltip: 'Edytuj produkt',
-            ),
-            IconButton(
-              icon: const Icon(Icons.remove_circle_outline),
-              onPressed: () => _updateQuantity(product, -1),
-              color: Colors.red,
-              tooltip: 'Wydaj z magazynu',
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              onPressed: () => _updateQuantity(product, 1),
-              color: Colors.green,
-              tooltip: 'Przyjmij do magazynu',
-            ),
-          ],
+        // ZMIANA TUTAJ: Usunięto Row z plus/minus, został tylko Edit
+        trailing: IconButton(
+          icon: const Icon(Icons.edit),
+          onPressed: () => _editProduct(product),
+          color: Colors.blue,
+          tooltip: 'Edytuj produkt',
         ),
         onTap: () => _showProductDetails(product),
       ),

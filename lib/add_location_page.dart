@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+// Zakładam, że ten plik i klasa istnieją i zawierają statyczną metodę getToken()
+import 'services/token_service.dart'; 
 
 class ParentLocation {
   final int id;
@@ -18,15 +19,6 @@ class ParentLocation {
 }
 
 enum LocationType { WAREHOUSE, RACK, SHELF }
-
-class TokenManager {
-  static const _storage = FlutterSecureStorage();
-  static const _tokenKey = 'auth_bearer_token';
-
-  static Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
-  }
-}
 
 class AddLocationPage extends StatefulWidget {
   const AddLocationPage({super.key});
@@ -55,7 +47,7 @@ class _AddLocationPageState extends State<AddLocationPage> {
   }
   
   Future<void> _fetchParentLocations() async {
-    final token = await TokenManager.getToken();
+    final token = await TokenService.getToken(); // Użycie TokenService
 
     if (token == null) {
       setState(() {
@@ -116,7 +108,7 @@ class _AddLocationPageState extends State<AddLocationPage> {
         'parentId': finalParentId,
       };
       
-      final token = await TokenManager.getToken();
+      final token = await TokenService.getToken(); // Użycie TokenService
       if (token == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Błąd: Wymagane jest zalogowanie.')),

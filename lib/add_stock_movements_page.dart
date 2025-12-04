@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'services/token_service.dart'; // Użycie TokenService
 
 class SimpleItem {
   final int id;
@@ -22,15 +22,6 @@ class StockMovementRequest {
   MovementType? type;
 }
 
-class TokenManager {
-  static const _storage = FlutterSecureStorage();
-  static const _tokenKey = 'auth_bearer_token';
-
-  static Future<String?> getToken() async {
-    return await _storage.read(key: _tokenKey);
-  }
-}
-
 class AddStockMovementsPage extends StatefulWidget {
   const AddStockMovementsPage({super.key});
 
@@ -46,7 +37,7 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
   bool _isLoadingData = true;
   String? _dataLoadError;
 
-  final String _apiMovementsUrl = 'http://ab-student-22052.uksouth.cloudapp.azure.com:8080/api/stock-movements';
+  final String _apiMovementsUrl = 'http://ab-student-22052.uksouth.cloudapp.azure.com:8080/api/movements';
   final String _apiProductsUrl = 'http://ab-student-22052.uksouth.cloudapp.azure.com:8080/api/products';
   final String _apiLocationsUrl = 'http://ab-student-22052.uksouth.cloudapp.azure.com:8080/api/locations';
 
@@ -57,7 +48,7 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
   }
 
   Future<void> _fetchInitialData() async {
-    final token = await TokenManager.getToken();
+    final token = await TokenService.getToken(); // Użycie TokenService
     if (token == null) {
       if (mounted) {
         setState(() {
@@ -117,7 +108,8 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
     });
   }
 
-  void _submitAllForms() async {
+ void _submitAllForms() async {
+    // 1. Walidacja formularzy
     bool allValid = true;
     for (var req in _movementRequests) {
       if (req.formKey.currentState!.validate()) {
@@ -129,51 +121,135 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
 
     if (!allValid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Wypełnij poprawnie wszystkie pola we wszystkich operacjach.')),
+        const SnackBar(
+            content: Text(
+                'Wypełnij poprawnie wszystkie pola we wszystkich operacjach.')),
       );
       return;
     }
 
-    final token = await TokenManager.getToken();
+    // 2. Pobranie tokena
+    final token = await TokenService.getToken();
     if (token == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Błąd: Wymagane jest zalogowanie.')),
       );
       return;
     }
-    
-    final List<Map<String, dynamic>> payload = _movementRequests.map((req) => {
-      'productId': req.productId,
-      'locationId': req.locationId,
-      'quantity': req.quantity,
-      'type': req.type.toString().split('.').last,
-    }).toList();
+
+    // Pokazujemy loader blokujący UI na czas wysyłania (opcjonalnie)
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
 
     final headers = {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
 
-    try {
-      final response = await http.post(
-        Uri.parse(_apiMovementsUrl),
-        headers: headers,
-        body: json.encode(payload),
-      );
+    int successCount = 0;
+    List<String> failureMessages = [];
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dodano ${_movementRequests.length} operacji pomyślnie!')),
+    // 3. Wysyłanie żądań
+    for (int i = 0; i < _movementRequests.length; i++) {
+      final req = _movementRequests[i];
+      final Map<String, dynamic> singlePayload = {
+        'productId': req.productId,
+        'locationId': req.locationId,
+        'quantity': req.quantity,
+        'type': req.type.toString().split('.').last,
+      };
+
+      try {
+        final response = await http.post(
+          Uri.parse(_apiMovementsUrl),
+          headers: headers,
+          body: json.encode(singlePayload),
         );
-        Navigator.pop(context); 
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd masowego dodawania: ${response.statusCode} - ${response.body}')),
-        );
+
+        if (response.statusCode == 201 || response.statusCode == 200) {
+          successCount++;
+        } else {
+          // Pobieramy nazwę produktu dla lepszego kontekstu błędu
+          String productName = 'Nieznany produkt';
+          try {
+            final foundProduct = _products.firstWhere(
+              (p) => p.id == req.productId,
+              orElse: () => SimpleItem(id: 0, name: 'Brak nazwy'),
+            );
+            productName = foundProduct.name;
+          } catch (_) {}
+
+          // Dodajemy szczegółowy komunikat błędu
+          failureMessages.add(
+              'Operacja ${i + 1} ($productName):\nKod ${response.statusCode}: ${utf8.decode(response.bodyBytes)}');
+        }
+      } catch (e) {
+        failureMessages.add('Operacja ${i + 1}: Błąd połączenia ($e)');
       }
-    } catch (e) {
+    }
+
+    // Zamykamy loader
+    Navigator.of(context).pop();
+
+    // 4. Obsługa wyników
+    if (failureMessages.isEmpty) {
+      // WSZYSTKO SIĘ UDAŁO
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Błąd sieci: $e')),
+        SnackBar(
+          content: Text('Sukces! Dodano $successCount operacji.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      // Zwracamy true, aby odświeżyć listę produktów
+      Navigator.pop(context, true);
+    } else {
+      // WYSTĄPIŁY BŁĘDY - Pokazujemy Alert Dialog
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 10),
+              Text('Wystąpiły błędy'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Udało się wykonać: $successCount operacji.\nNie powiodło się: ${failureMessages.length} operacji.',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                const Text('Szczegóły błędów:'),
+                const Divider(),
+                ...failureMessages.map((msg) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text(msg,
+                          style: const TextStyle(color: Colors.red)),
+                    )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(); // Zamknij dialog
+                // Jeśli chociaż jedna się udała, możemy chcieć wrócić i odświeżyć,
+                // ale zazwyczaj użytkownik chce poprawić błędy.
+                // Jeśli chcesz zamknąć stronę mimo błędów, odkomentuj poniższą linię:
+                // Navigator.of(context).pop(true); 
+              },
+              child: const Text('ZROZUMIAŁEM'),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -280,6 +356,8 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
                   );
                 }).toList(),
                 onChanged: (MovementType? newValue) {
+                  // Nie używamy setState tutaj, ponieważ stan jest przechowywany w obiekcie request.
+                  // Zapisujemy wartość bezpośrednio, aby nie stracić stanu przy scrollowaniu/przebudowie.
                   request.type = newValue;
                 },
                 validator: (value) => value == null ? 'Wybierz typ.' : null,
@@ -334,6 +412,7 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
                   labelText: 'Ilość',
                   border: OutlineInputBorder(),
                 ),
+                initialValue: request.quantity?.toString(),
                 keyboardType: TextInputType.number,
                 validator: (value) {
                   if (value == null || value.isEmpty || int.tryParse(value) == null || int.parse(value) <= 0) {
