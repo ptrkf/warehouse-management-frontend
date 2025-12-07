@@ -4,6 +4,7 @@ import 'add_product_page.dart';
 import 'add_category_page.dart';
 import 'add_location_page.dart';
 import 'add_stock_movements_page.dart'; 
+import 'edit_product_page.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'services/token_service.dart'; 
@@ -194,7 +195,7 @@ class _ProductsPageState extends State<ProductsPage> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              TokenService.deleteToken(); 
+              TokenService.clearUserData(); 
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
             tooltip: 'Wyloguj',
@@ -251,7 +252,23 @@ class _ProductsPageState extends State<ProductsPage> {
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
                     ? Center(
-                        child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                            const SizedBox(height: 16),
+                            Text(
+                              _errorMessage!,
+                              style: const TextStyle(color: Colors.red),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _fetchProducts,
+                              child: const Text('Spróbuj ponownie'),
+                            ),
+                          ],
+                        ),
                       )
                     : _filteredProducts.isEmpty
                         ? _buildEmptyState()
@@ -282,14 +299,13 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.blue,
             foregroundColor: Colors.white,
             label: 'Dodaj Produkt',
-            onTap: () async { // Zmieniamy na async i używamy await
+            onTap: () async {
               final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddProductPage()),
               );
-              // Sprawdzamy, czy strona zwróciła 'true' (sygnał do odświeżenia)
               if (shouldRefresh == true) {
-                _fetchProducts(); // Metoda odświeżająca dane
+                _fetchProducts();
               }
             },
           ),
@@ -298,12 +314,11 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.green,
             foregroundColor: Colors.white,
             label: 'Nowa Operacja',
-            onTap: () async { // Zmieniamy na async i używamy await
+            onTap: () async {
               final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddStockMovementsPage()),
               );
-              // Sprawdzamy, czy strona zwróciła 'true'
               if (shouldRefresh == true) {
                 _fetchProducts(); 
               }
@@ -314,12 +329,11 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.orange,
             foregroundColor: Colors.white,
             label: 'Dodaj Lokalizację',
-            onTap: () async { // Zmieniamy na async i używamy await
+            onTap: () async {
               final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddLocationPage()),
               );
-              // Sprawdzamy, czy strona zwróciła 'true'
               if (shouldRefresh == true) {
                 _fetchProducts(); 
               }
@@ -330,7 +344,7 @@ class _ProductsPageState extends State<ProductsPage> {
             backgroundColor: Colors.purple,
             foregroundColor: Colors.white,
             label: 'Dodaj Kategorię',
-            onTap: () async { // Dodajemy async/await, choć dodanie kategorii nie wpływa bezpośrednio na wyświetlanie produktów (chyba że dodaje nową, wcześniej niewidoczną)
+            onTap: () async {
               final shouldRefresh = await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const AddCategoryPage()),
@@ -422,7 +436,6 @@ class _ProductsPageState extends State<ProductsPage> {
             ),
           ],
         ),
-        // ZMIANA TUTAJ: Usunięto Row z plus/minus, został tylko Edit
         trailing: IconButton(
           icon: const Icon(Icons.edit),
           onPressed: () => _editProduct(product),
@@ -487,270 +500,23 @@ class _ProductsPageState extends State<ProductsPage> {
     return _allProducts.map((p) => p.category).toSet().length;
   }
 
-  void _updateQuantity(Product product, int change) {
-    setState(() {
-      final newQuantity = product.quantity + change;
-      if (newQuantity >= 0) {
-        product.quantity = newQuantity;
-        _onSearchChanged(); 
-      }
-    });
-    
-    final action = change > 0 ? 'Przyjęto' : 'Wydano';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$action: ${product.name} (stan: ${product.quantity})'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: change > 0 ? Colors.green : Colors.orange,
-      ),
-    );
-  }
-
-  void _editProduct(Product product) {
-    final nameController = TextEditingController(text: product.name);
-    final descriptionController = TextEditingController(text: product.description);
-    final quantityController = TextEditingController(text: product.quantity.toString());
-    final minStockController = TextEditingController(text: product.minStock.toString());
-    final locationController = TextEditingController(text: product.location);
-    String selectedCategory = product.category;
-    
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.edit, color: Colors.blue),
-              SizedBox(width: 8),
-              Text('Edytuj produkt'),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nazwa produktu',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.inventory_2),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    decoration: const InputDecoration(
-                      labelText: 'Kategoria',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.category),
-                    ),
-                    items: ['Elektronika', 'Meble', 'Akcesoria', 'Biuro', 'Odzież', 'Narzędzia', 'Inne']
-                        .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                        .toList(),
-                    onChanged: (value) => setState(() => selectedCategory = value!),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: descriptionController,
-                    maxLines: 2,
-                    decoration: const InputDecoration(
-                      labelText: 'Opis',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.description),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: quantityController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Stan aktualny',
-                            border: OutlineInputBorder(),
-                            suffixText: 'szt.',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: minStockController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Min. stan',
-                            border: OutlineInputBorder(),
-                            suffixText: 'szt.',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: locationController,
-                    decoration: const InputDecoration(
-                      labelText: 'Lokalizacja',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.location_on),
-                      hintText: 'np. A-1-3',
-                    ),
-                    textCapitalization: TextCapitalization.characters,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('ANULUJ'),
-            ),
-            FilledButton.icon(
-              onPressed: () => _confirmDeleteProduct(product),
-              icon: const Icon(Icons.delete),
-              label: const Text('USUŃ'),
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (nameController.text.isNotEmpty && 
-                    locationController.text.isNotEmpty) {
-                  
-                  Navigator.of(context).pop();
-                  
-                  this.setState(() {
-                    final index = _allProducts.indexWhere((p) => p.id == product.id);
-                    if (index != -1) {
-                      _allProducts[index] = Product(
-                        id: product.id,
-                        name: nameController.text,
-                        category: selectedCategory,
-                        quantity: int.tryParse(quantityController.text) ?? product.quantity,
-                        location: locationController.text.toUpperCase(),
-                        minStock: int.tryParse(minStockController.text) ?? product.minStock,
-                        description: descriptionController.text.isEmpty 
-                            ? 'Brak opisu' 
-                            : descriptionController.text,
-                        dimensions: product.dimensions,
-                      );
-                    }
-                    _onSearchChanged(); 
-                  });
-                  
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Produkt "${nameController.text}" został zaktualizowany!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              },
-              style: FilledButton.styleFrom(backgroundColor: Colors.blue),
-              child: const Text('ZAPISZ ZMIANY'),
-            ),
-          ],
+  // NOWA METODA - zastąpiła stary dialog edycji
+  void _editProduct(Product product) async {
+    final shouldRefresh = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProductPage(
+          productId: product.id,
+          initialName: product.name,
+          initialCategory: product.category,
+          initialDimensions: product.dimensions,
         ),
       ),
     );
-  }
-
-  void _confirmDeleteProduct(Product product) {
-    Navigator.of(context).pop(); 
     
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Usuń produkt'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Czy na pewno chcesz usunąć produkt?'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(_getCategoryIcon(product.category), color: Colors.grey[600]),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text('${product.category} • ${product.location}'),
-                        Text('Stan: ${product.quantity} szt.'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Ta akcja jest nieodwracalna!',
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ANULUJ'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              
-              setState(() {
-                _allProducts.remove(product);
-                _onSearchChanged();
-              });
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Produkt "${product.name}" został usunięty'),
-                  backgroundColor: Colors.red,
-                  action: SnackBarAction(
-                    label: 'COFNIJ',
-                    onPressed: () {
-                      setState(() {
-                        _allProducts.add(product);
-                        _onSearchChanged();
-                      });
-                    },
-                  ),
-                ),
-              );
-            },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('USUŃ PRODUKT'),
-          ),
-        ],
-      ),
-    );
+    if (shouldRefresh == true) {
+      _fetchProducts(); // Odświeża listę po edycji/usunięciu
+    }
   }
 
   void _showProductDetails(Product product) {
@@ -775,9 +541,9 @@ class _ProductsPageState extends State<ProductsPage> {
             _buildDetailRow('Aktualny stan', '${product.quantity} szt.'),
             _buildDetailRow('Minimalny stan', '${product.minStock} szt.'),
             _buildDetailRow('Lokalizacja', product.location),
-            if (product.dimensions != null) _buildDetailRow('Wymiary (X)', product.dimensions!['x'].toString()),
-            if (product.dimensions != null) _buildDetailRow('Wymiary (Y)', product.dimensions!['y'].toString()),
-            if (product.dimensions != null) _buildDetailRow('Wymiary (Z)', product.dimensions!['z'].toString()),
+            if (product.dimensions != null) _buildDetailRow('Wymiary (X)', '${product.dimensions!['x']} mm'),
+            if (product.dimensions != null) _buildDetailRow('Wymiary (Y)', '${product.dimensions!['y']} mm'),
+            if (product.dimensions != null) _buildDetailRow('Wymiary (Z)', '${product.dimensions!['z']} mm'),
             if (isLowStock) ...[
               const SizedBox(height: 8),
               Container(
@@ -808,6 +574,13 @@ class _ProductsPageState extends State<ProductsPage> {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Zamknij'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _editProduct(product); // Otwiera stronę edycji
+            },
+            child: const Text('Edytuj'),
           ),
         ],
       ),
