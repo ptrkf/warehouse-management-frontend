@@ -8,6 +8,7 @@ import 'edit_product_page.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'services/token_service.dart'; 
+import 'alerts_page.dart';
 
 class Product {
   final int id;
@@ -192,15 +193,25 @@ class _ProductsPageState extends State<ProductsPage> {
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              TokenService.clearUserData(); 
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
-            tooltip: 'Wyloguj',
-          ),
-        ],
+  IconButton(
+    icon: const Icon(Icons.notifications),
+    onPressed: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const AlertsPage()),
+      );
+    },
+    tooltip: 'Powiadomienia',
+  ),
+  IconButton(
+    icon: const Icon(Icons.logout),
+    onPressed: () {
+      TokenService.clearUserData(); 
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    },
+    tooltip: 'Wyloguj',
+  ),
+],
       ),
       body: Column(
         children: [

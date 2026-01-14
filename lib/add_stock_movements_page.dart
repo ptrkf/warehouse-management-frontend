@@ -163,12 +163,17 @@ class _AddStockMovementsPageState extends State<AddStockMovementsPage> {
       };
 
       try {
+         print('🚀 === WYSYŁANIE ŻĄDANIA ===');
+  print('📦 Payload: ${json.encode(singlePayload)}');
+  print('🔑 Token: ${token?.substring(0, 20)}...');
         final response = await http.post(
           Uri.parse(_apiMovementsUrl),
           headers: headers,
           body: json.encode(singlePayload),
         );
-
+  print('📡 Status: ${response.statusCode}');
+  print('📝 Response body: ${utf8.decode(response.bodyBytes)}');
+  print('📋 Response headers: ${response.headers}');
         if (response.statusCode == 201 || response.statusCode == 200) {
           successCount++;
         } else {
